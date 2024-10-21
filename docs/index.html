@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mini-game</title>
-    <script type="module" crossorigin src="./assets/index-DcCuuqqQ.js"></script>
+    <title>アイスホッケー</title>
+    <script type="module" crossorigin src="./assets/index-CTUjDpjX.js"></script>
   </head>
   <body>
     <main></main>
@@ -14,11 +14,12 @@
       margin: 0;
     }
     .p5Canvas{
-      position: absolute;
+      display: block;
     }
     *{
       touch-action: none;
       user-select: none;
+      -moz-user-select: -moz-none;
       -khtml-user-select: none;
       -webkit-user-select: none;
       pointer-events: none;
@@ -26,6 +27,32 @@
     ::-webkit-scrollbar{
       display: none;
       width: 0;
+    }
+    .dom-ui{
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 20vh;
+    }
+    .select-ui{
+    }
+    .button-ui{
+      width: min(200px,50vw);
+      height: 2rem;
+      color: #eee;
+      background-color: #333;
+      box-shadow: 0 0 5px #0008;
+      border: none;
+      border-radius: 5px;
+      pointer-events: all;
+      font-size: 1rem;
+      text-align: center;
     }
   </style>
 </html>

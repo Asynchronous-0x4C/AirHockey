@@ -1,0 +1,23 @@
+{
+  "name": "mini-game",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "devh": "vite --host",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.3",
+    "vite": "^5.4.8"
+  },
+  "dependencies": {
+    "@types/matter-js": "^0.19.7",
+    "@types/p5": "^1.7.6",
+    "matter-js": "^0.20.0",
+    "mini-game": "file:",
+    "p5": "^1.11.0"
+  }
+}

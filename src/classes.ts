@@ -39,15 +39,12 @@ export class Start extends State{
   mode!: HTMLSelectElement;
   rule!:HTMLSelectElement;
   start!:HTMLButtonElement;
-  mode_options:Array<string>=["1 vs 1"];
+  wrapper!:HTMLDivElement;
+  mode_options:Array<string>=["vs CPU","1 vs 1 Casual","1 vs 1 Normal"];
   rule_options:Array<string>=["30s","60s","5pt","10pt"];
 
   constructor(p:p5){
     super(p);
-    this.init();
-  }
-
-  init(){
     this.mode=document.createElement("select");
     this.mode.classList.add("button-ui","select-ui");
     this.setOptions(this.mode,this.mode_options);
@@ -57,18 +54,23 @@ export class Start extends State{
     this.start=document.createElement("button");
     this.start.textContent="Start";
     this.start.classList.add("button-ui");
-    const wrapper=document.createElement("div");
-    wrapper.classList.add("dom-ui");
-    wrapper.appendChild(this.mode);
-    wrapper.appendChild(this.rule);
-    wrapper.appendChild(this.start);
-    document.body.appendChild(wrapper);
+    this.wrapper=document.createElement("div");
+    this.wrapper.classList.add("dom-ui");
+    this.wrapper.appendChild(this.mode);
+    this.wrapper.appendChild(this.rule);
+    this.wrapper.appendChild(this.start);
+    document.body.appendChild(this.wrapper);
     this.start.addEventListener('click',()=>{
-      document.body.removeChild(wrapper);
+      this.wrapper.style.display="none";
       states.get("game")!.init();
       (states.get("game")!as Main).setState(this.mode.options[this.mode.selectedIndex].innerHTML,this.rule.options[this.rule.selectedIndex].innerHTML);
       state.set(states.get("game")!);
     });
+    this.init();
+  }
+
+  init(){
+    this.wrapper.style.display="flex";
   }
 
   private setOptions(s:HTMLSelectElement,o:Array<string>){
@@ -84,7 +86,7 @@ export class Start extends State{
     this.p.fill(30);
     this.p.textAlign("center");
     this.p.textSize(50);
-    this.p.text("Ice Hockey",this.p.width*0.5,50);
+    this.p.text("Air Hockey",this.p.width*0.5,50);
   }
 
   update(): void {
@@ -123,8 +125,10 @@ export class Main extends State{
       this.type="time";
       this.timer=Number(rule.replace("s",""));
     }
-    if(mode=="1 vs 1"){
-      this.bars.push(new Bar("player1",100,this.p),new Bar("player2",this.p.width-100,this.p));
+    switch(mode){
+      case "vs CPU":this.bars.push(new Bar("player",100,this.p.height,this.p),new CPUBar(this.ball!,this.p.width-100,this.p.height,this.p));break;
+      case "1 vs 1 Casual":this.bars.push(new Bar("player1",100,this.p.height,this.p),new Bar("player2",this.p.width-100,this.p.height,this.p));break;
+      case "1 vs 1 Normal":this.bars.push(new Bar("player1",100,this.p.height*0.4,this.p),new Bar("player2",this.p.width-100,this.p.height*0.4,this.p));break;
     }
   }
 
@@ -138,6 +142,15 @@ export class Main extends State{
     switch(this.type){
       case "time":this.p.text(`${this.timer.toFixed(1)}s`,this.p.width*0.5,50);break;
       case "point":this.p.text(`${this.end_point} point`,this.p.width*0.5,50);break;
+    }
+    if(this.start_timer>0){
+      this.p.text(Math.ceil(this.start_timer),this.p.width*0.5,this.p.height-80);
+      const fract=this.p.fract(this.start_timer);
+      this.p.noFill();
+      this.p.stroke(30);
+      this.p.strokeWeight(5);
+      this.p.arc(this.p.width*0.5,this.p.height-100,100,100,-this.p.HALF_PI-this.p.TWO_PI*fract,-this.p.HALF_PI);
+      this.p.strokeWeight(1);
     }
   }
 
@@ -176,19 +189,22 @@ export class Main extends State{
   }
 }
 
-class Bar{
+export class Bar{
   name:string="";
   id:number=-1;
   left:boolean=false;
   position:Vector=new Vector(0,0);
   size:Vector=new Vector(10,200);
+  velocity=new Vector(0,0);
   point:number=0;
+  dz:DamageZone;
   p:p5;
 
-  constructor(name:string,x:number,p:p5){
+  constructor(name:string,x:number,dzh:number,p:p5){
     this.name=name;
     this.left=x<p.width*0.5;
     this.position.set(x,p.height*0.5);
+    this.dz=new DamageZone(dzh,this.left,p);
     this.p=p;
   }
 
@@ -202,22 +218,25 @@ class Bar{
     }else{
       const touch=controller.getTouchByID(this.id);
       if(touch!=null){
+        this.velocity.y=touch.touch.y-this.position.y;
         this.position.y=touch.touch.y;
       }else{
+        this.velocity.y=0;
         this.id=-1;
       }
     }
     if(this.left){
-      if(controller.pressedKeyCode.includes(87))this.position.y-=7;
-      if(controller.pressedKeyCode.includes(83))this.position.y+=7;
+      if(controller.pressedKeyCode.includes(87))this.position.y-=12;
+      if(controller.pressedKeyCode.includes(83))this.position.y+=12;
     }else{
-      if(controller.pressedKeyCode.includes(38))this.position.y-=7;
-      if(controller.pressedKeyCode.includes(40))this.position.y+=7;
+      if(controller.pressedKeyCode.includes(38))this.position.y-=12;
+      if(controller.pressedKeyCode.includes(40))this.position.y+=12;
     }
     this.position.y=this.p.constrain(this.position.y,this.size.y*0.5,this.p.height-this.size.y*0.5);
   }
 
   display(){
+    this.dz.display();
     this.p.noStroke();
     this.p.fill(30);
     this.p.rectMode("center");
@@ -232,7 +251,28 @@ class Bar{
   }
 }
 
-class Ball{
+class DamageZone{
+  position:Vector;
+  size:Vector;
+  p:p5;
+
+  constructor(h:number,left:boolean,p:p5){
+    this.position=new Vector(left?0:p.width,p.height*0.5);
+    this.size=new Vector(5,h);
+    this.p=p;
+  }
+
+  update(){}
+
+  display(){
+    this.p.noStroke();
+    this.p.fill(255,30,30);
+    this.p.rectMode("center");
+    this.p.rect(this.position.x,this.position.y,this.size.x,this.size.y);
+  }
+}
+
+export class Ball{
   position:Vector=new Vector(0,0);
   velocity:Vector=new Vector(0,0);
   move:boolean=false;
@@ -270,7 +310,7 @@ class Ball{
     if(!this.move)return;
     if(this.position.y-this.radius<=0||this.position.y+this.radius>=this.p.height){
       if(this.velocity.y>0){
-        this.position.y=this.position.y-this.radius;
+        this.position.y=this.p.height-this.radius;
       }else if(this.velocity.y<0){
         this.position.y=this.radius;
       }
@@ -279,28 +319,36 @@ class Ball{
     }
     if(this.position.x-this.radius<=0||this.position.x+this.radius>=this.p.width){
       if(this.velocity.x>0){
-        this.position.x=this.position.x-this.radius;
+        this.position.x=this.p.width-this.radius;
       }else if(this.velocity.x<0){
         this.position.x=this.radius;
       }
       this.velocity.x=-this.velocity.x;
-      const left=this.position.x<this.p.width*0.5;
-      bars.forEach(b=>{
-        if(b.left!=left)b.point++;
-      });
-      const m=this.velocity.mag();
-      this.velocity.setMag(Math.max(7,m*0.75));
     }
     bars.forEach(b=>{
       const pos=this.position.copy().sub(b.position);
       const hit=this.roundRectDistFunc(pos,b.size.x*0.5,b.size.y*0.5,this.radius);
       if(hit){
         this.velocity.x=-this.velocity.x;
+        this.velocity.y+=this.p.constrain(b.velocity.y*0.35,-Math.abs(this.velocity.x),Math.abs(this.velocity.x));
         this.velocity.y+=(Math.random()-0.5)*3;
         const m=this.velocity.mag();
         this.velocity.setMag(m*1.15);
       }
+      const dpos=this.position.copy().sub(b.dz.position);
+      const dhit=this.roundRectDistFunc(dpos,b.dz.size.x*0.5,b.dz.size.y*0.5,this.radius);
+      if(dhit){
+        const left=this.position.x<this.p.width*0.5;
+        bars.forEach(b=>{
+          if(b.left!=left)b.point++;
+        });
+        const m=this.velocity.mag();
+        this.velocity.setMag(Math.max(7,m*0.75));
+      }
     });
+    this.velocity.limit(this.radius*1.9);
+    this.velocity.x=Math.sign(this.velocity.x)*Math.max(3,Math.abs(this.velocity.x));
+    this.velocity.limit(this.radius*1.9);
   }
 
   length(x:number,y:number){
@@ -311,5 +359,34 @@ class Ball{
     const dx=Math.abs(p.x)-x;
     const dy=Math.abs(p.y)-y;
     return Math.min(Math.max(dx, dy), 0.0) + this.length(Math.max(dx,0.0),Math.max(dy,0.0))- radius<=0;
+  }
+}
+
+export class CPUBar extends Bar{
+  ball:Ball;
+  cooltime:number=0;
+  target:number=0;
+  lim:number=12;
+
+  constructor(b:Ball,x:number,dzh:number,p:p5){
+    super("CPU",x,dzh,p);
+    this.ball=b;
+    this.target=this.position.y;
+  }
+
+  update(){
+    this.cooltime-=1/this.p.frameRate();
+    if((this.left&&this.ball.velocity.x<0)||(!this.left&&this.ball.velocity.x>0)){
+      if(this.cooltime<=0){
+        if((this.left&&this.ball.position.x<this.position.x)||(!this.left&&this.ball.position.x>this.position.x)){
+
+        }else{
+          this.target=this.ball.position.y+(Math.random()-0.5)*this.ball.velocity.mag();
+          this.cooltime=0.5-Math.abs(this.ball.velocity.x)*0.1;
+        }
+      }
+    }
+    this.position.y+=(this.target-this.position.y)*0.065;
+    this.position.y=this.p.constrain(this.position.y,this.size.y*0.5,this.p.height-this.size.y*0.5);
   }
 }

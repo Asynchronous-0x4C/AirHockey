@@ -1,5 +1,8 @@
 import p5, { Vector } from "p5";
 import { controller, state, states } from "./sketch";
+import { DamageParticle, Particle } from "./particle";
+
+let cpu_level="Level 1";
 
 export class StateManager{
   state:State;
@@ -37,40 +40,51 @@ export class State{
 
 export class Start extends State{
   mode!: HTMLSelectElement;
+  level!: HTMLSelectElement;
   rule!:HTMLSelectElement;
   start!:HTMLButtonElement;
   wrapper!:HTMLDivElement;
-  mode_options:Array<string>=["vs CPU","1 vs 1 Casual","1 vs 1 Normal"];
+  level_box!:HTMLDivElement;
+  mode_options:Array<string>=["vs CPU Casual","vs CPU Normal","1 vs 1 Casual","1 vs 1 Normal","CPU vs CPU"];
+  level_options:Array<string>=["Level 1","Level 2"];
   rule_options:Array<string>=["30s","60s","5pt","10pt"];
 
   constructor(p:p5){
     super(p);
-    this.mode=document.createElement("select");
-    this.mode.classList.add("button-ui","select-ui");
+    this.mode=document.getElementById("mode")!as HTMLSelectElement;
     this.setOptions(this.mode,this.mode_options);
-    this.rule=document.createElement("select");
-    this.rule.classList.add("button-ui","select-ui");
+    this.level=document.getElementById("cpu-level")!as HTMLSelectElement;
+    this.setOptions(this.level,this.level_options);
+    this.rule=document.getElementById("rule")!as HTMLSelectElement;
     this.setOptions(this.rule,this.rule_options);
-    this.start=document.createElement("button");
-    this.start.textContent="Start";
-    this.start.classList.add("button-ui");
-    this.wrapper=document.createElement("div");
-    this.wrapper.classList.add("dom-ui");
-    this.wrapper.appendChild(this.mode);
-    this.wrapper.appendChild(this.rule);
-    this.wrapper.appendChild(this.start);
-    document.body.appendChild(this.wrapper);
+    this.start=document.getElementById("start-button")!as HTMLButtonElement;
+    this.wrapper=document.getElementById("wrapper")!as HTMLDivElement;
+    this.level_box=document.getElementById("level-box")!as HTMLDivElement;
     this.start.addEventListener('click',()=>{
       this.wrapper.style.display="none";
+      cpu_level=this.getString(this.level);
       states.get("game")!.init();
-      (states.get("game")!as Main).setState(this.mode.options[this.mode.selectedIndex].innerHTML,this.rule.options[this.rule.selectedIndex].innerHTML);
+      (states.get("game")!as Main).setState(this.getString(this.mode),this.getString(this.rule));
       state.set(states.get("game")!);
+    });
+    this.mode.addEventListener('change',()=>{
+      this.initVisibility();
     });
     this.init();
   }
 
   init(){
     this.wrapper.style.display="flex";
+    this.initVisibility();
+  }
+
+  private initVisibility(){
+    const selected=this.getString(this.mode);
+    this.level_box.style.display=selected.includes("vs CPU")?"flex":"none";
+  }
+
+  private getString(s:HTMLSelectElement){
+    return s.options[s.selectedIndex].innerHTML;
   }
 
   private setOptions(s:HTMLSelectElement,o:Array<string>){
@@ -102,6 +116,7 @@ export class Main extends State{
   timer:number=0;
   end_point:number=0;
   bars:Array<Bar>=[];
+  particles:Array<Particle>=[];
 
   constructor(p:p5){
     super(p);
@@ -109,7 +124,7 @@ export class Main extends State{
   }
 
   init(){
-    this.ball=new Ball(this.p);
+    this.ball=new Ball(this,this.p);
     this.start_timer=3;
     this.bars=[];
   }
@@ -126,14 +141,19 @@ export class Main extends State{
       this.timer=Number(rule.replace("s",""));
     }
     switch(mode){
-      case "vs CPU":this.bars.push(new Bar("player",100,this.p.height,this.p),new CPUBar(this.ball!,this.p.width-100,this.p.height,this.p));break;
+      case "vs CPU Casual":this.bars.push(new Bar("player",100,this.p.height,this.p),new CPUBar(this.ball!,this.p.width-100,this.p.height,this.p));break;
+      case "vs CPU Normal":this.bars.push(new Bar("player",100,this.p.height*0.4,this.p),new CPUBar(this.ball!,this.p.width-100,this.p.height*0.4,this.p));break;
       case "1 vs 1 Casual":this.bars.push(new Bar("player1",100,this.p.height,this.p),new Bar("player2",this.p.width-100,this.p.height,this.p));break;
       case "1 vs 1 Normal":this.bars.push(new Bar("player1",100,this.p.height*0.4,this.p),new Bar("player2",this.p.width-100,this.p.height*0.4,this.p));break;
+      case "CPU vs CPU":this.bars.push(new CPUBar(this.ball!,100,this.p.height,this.p),new CPUBar(this.ball!,this.p.width-100,this.p.height,this.p));break;
     }
   }
 
   display(): void {
     this.p.background(230);
+    this.particles.forEach(p=>{
+      p.display();
+    })
     this.ball!.display();
     this.bars.forEach(b=>b.display());
     this.p.fill(30);
@@ -155,6 +175,10 @@ export class Main extends State{
   }
 
   update(): void {
+    this.particles.forEach(p=>{
+      p.update();
+      if(p.isDead)this.particles.splice(this.particles.indexOf(p),1);
+    })
     if(this.start_timer>0){
       this.start_timer-=1/this.p.frameRate();
       if(this.start_timer<=0){
@@ -277,10 +301,12 @@ export class Ball{
   velocity:Vector=new Vector(0,0);
   move:boolean=false;
   radius:number=20;
+  parent:Main;
   p:p5;
 
-  constructor(p:p5){
+  constructor(parent:Main,p:p5){
     this.p=p;
+    this.parent=parent;
     this.position.set(p.width*0.5,p.height*0.5);
     this.velocity.set((Math.random()+7),0).rotate(Math.random()<0.5?p.random(-p.QUARTER_PI,p.QUARTER_PI):p.random(p.PI-p.QUARTER_PI,p.PI+p.QUARTER_PI));
   }
@@ -327,17 +353,18 @@ export class Ball{
     }
     bars.forEach(b=>{
       const pos=this.position.copy().sub(b.position);
-      const hit=this.roundRectDistFunc(pos,b.size.x*0.5,b.size.y*0.5,this.radius);
-      if(hit){
-        this.velocity.x=-this.velocity.x;
-        this.velocity.y+=this.p.constrain(b.velocity.y*0.35,-Math.abs(this.velocity.x),Math.abs(this.velocity.x));
+      const hit=this.roundRectReaction(pos,b.size.x*0.5,b.size.y*0.5,this.radius);
+      if(hit.hit){
+        this.velocity.reflect(hit.normal);
+        this.velocity.y*=0.9;
+        this.velocity.y+=b.velocity.y*0.35;
         this.velocity.y+=(Math.random()-0.5)*3;
-        const m=this.velocity.mag();
-        this.velocity.setMag(m*1.15);
+        this.velocity.x*=1.15;
       }
       const dpos=this.position.copy().sub(b.dz.position);
-      const dhit=this.roundRectDistFunc(dpos,b.dz.size.x*0.5,b.dz.size.y*0.5,this.radius);
-      if(dhit){
+      const dhit=this.roundRectReaction(dpos,b.dz.size.x*0.5,b.dz.size.y*0.5,this.radius);
+      if(dhit.hit){
+        this.parent.particles.push(new DamageParticle(new Vector(b.left?0:this.p.width,this.position.y),new Vector(5,5),new Vector(0,0),this.p));
         const left=this.position.x<this.p.width*0.5;
         bars.forEach(b=>{
           if(b.left!=left)b.point++;
@@ -346,19 +373,31 @@ export class Ball{
         this.velocity.setMag(Math.max(7,m*0.75));
       }
     });
-    this.velocity.limit(this.radius*1.9);
-    this.velocity.x=Math.sign(this.velocity.x)*Math.max(3,Math.abs(this.velocity.x));
-    this.velocity.limit(this.radius*1.9);
+    this.velocity.x=Math.max(Math.abs(this.velocity.y)*0.75,Math.abs(this.velocity.x))*Math.sign(this.velocity.x);
+    this.velocity.limit(this.radius*2.1);
   }
 
   length(x:number,y:number){
     return Math.sqrt(x*x+y*y);
   }
 
-  roundRectDistFunc(p:Vector,x:number,y:number,radius:number){
+  roundRectDist(p:Vector,x:number,y:number,radius:number) {
     const dx=Math.abs(p.x)-x;
     const dy=Math.abs(p.y)-y;
-    return Math.min(Math.max(dx, dy), 0.0) + this.length(Math.max(dx,0.0),Math.max(dy,0.0))- radius<=0;
+    return Math.min(Math.max(dx, dy), 0.0) + this.length(Math.max(dx,0.0),Math.max(dy,0.0))- radius;
+  }
+
+  roundRectReaction(p:Vector,x:number,y:number,radius:number){
+    let delta=1e-5;
+    let d=this.roundRectDist(p,x,y,radius);
+    if(d<=0){
+      const dx=this.roundRectDist(p.copy().add(delta,0),x,y,radius)-this.roundRectDist(p.copy().add(-delta,0),x,y,radius);
+      const dy=this.roundRectDist(p.copy().add(0,delta),x,y,radius)-this.roundRectDist(p.copy().add(0,-delta),x,y,radius);
+      const n=new Vector(dx,dy).normalize();
+      return {hit:true,normal:n.mult(-d)};
+    }else{
+      return {hit:false,normal:new Vector(0,0)};
+    }
   }
 }
 
@@ -366,12 +405,16 @@ export class CPUBar extends Bar{
   ball:Ball;
   cooltime:number=0;
   target:number=0;
-  lim:number=12;
+  lim:number=0.065;
+  smash:boolean=false;
+  dir:number=1;
+  level:number=1;
 
   constructor(b:Ball,x:number,dzh:number,p:p5){
     super("CPU",x,dzh,p);
     this.ball=b;
     this.target=this.position.y;
+    this.level=Number(cpu_level.replace("Level ",""));
   }
 
   update(){
@@ -379,14 +422,30 @@ export class CPUBar extends Bar{
     if((this.left&&this.ball.velocity.x<0)||(!this.left&&this.ball.velocity.x>0)){
       if(this.cooltime<=0){
         if((this.left&&this.ball.position.x<this.position.x)||(!this.left&&this.ball.position.x>this.position.x)){
-
+          this.target+=-this.ball.velocity.y*this.dir;
         }else{
-          this.target=this.ball.position.y+(Math.random()-0.5)*this.ball.velocity.mag();
           this.cooltime=0.5-Math.abs(this.ball.velocity.x)*0.1;
+          if(this.level>1){
+            this.target=this.ball.position.y+(Math.random()-0.5)*this.ball.velocity.mag()+Math.sign(this.ball.velocity.y)*this.size.y*(this.smash?1.2:0);
+            const dist=Math.abs(this.position.x-this.ball.position.x)-Math.random()*10-5;
+            const vx=Math.abs(this.ball.velocity.x);
+            if(!this.smash&&dist<vx*vx*0.5){
+              this.smash=true;
+            }
+          }else{
+            this.target=this.ball.position.y+(Math.random()-0.5)*this.ball.velocity.mag();
+          }
         }
       }
+    }else{
+      this.smash=false;
+      this.lim=0.065;
+      this.dir=Math.sign(Math.random()-0.5);
     }
-    this.position.y+=(this.target-this.position.y)*0.065;
+    const tempy=this.position.y;
+    this.position.y+=(this.target-this.position.y)*this.lim;
     this.position.y=this.p.constrain(this.position.y,this.size.y*0.5,this.p.height-this.size.y*0.5);
+    this.target=this.p.constrain(this.target,this.size.y*0.5,this.p.height-this.size.y*0.5);
+    this.velocity.y=(this.position.y-tempy)*0.5;
   }
 }

@@ -1,5 +1,5 @@
 import p5, { Vector } from "p5";
-import { controller, loop, setLoop, state, states } from "./sketch";
+import { controller, setLoop, state, states } from "./sketch";
 import { DamageParticle, Particle } from "./particle";
 
 let cpu_level="Level 1";

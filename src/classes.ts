@@ -1,8 +1,10 @@
 import p5, { Vector } from "p5";
-import { controller, state, states } from "./sketch";
+import { controller, loop, setLoop, state, states } from "./sketch";
 import { DamageParticle, Particle } from "./particle";
 
 let cpu_level="Level 1";
+let left_cpu_level="Level 1";
+let right_cpu_level="Level 1";
 
 export class StateManager{
   state:State;
@@ -45,7 +47,9 @@ export class Start extends State{
   start!:HTMLButtonElement;
   wrapper!:HTMLDivElement;
   level_box!:HTMLDivElement;
-  mode_options:Array<string>=["vs CPU Casual","vs CPU Normal","1 vs 1 Casual","1 vs 1 Normal","CPU vs CPU"];
+  double_level_box!:HTMLDivElement;
+  pause!:HTMLButtonElement;
+  mode_options:Array<string>=["vs CPU Casual","vs CPU Normal","1 vs 1 Casual","1 vs 1 Normal","Arcade","CPU vs CPU"];
   level_options:Array<string>=["Level 1","Level 2"];
   rule_options:Array<string>=["30s","60s","5pt","10pt"];
 
@@ -55,18 +59,48 @@ export class Start extends State{
     this.setOptions(this.mode,this.mode_options);
     this.level=document.getElementById("cpu-level")!as HTMLSelectElement;
     this.setOptions(this.level,this.level_options);
+    const left_level=document.getElementById("left-cpu-level")!as HTMLSelectElement;
+    this.setOptions(left_level,this.level_options);
+    const right_level=document.getElementById("right-cpu-level")!as HTMLSelectElement;
+    this.setOptions(right_level,this.level_options);
     this.rule=document.getElementById("rule")!as HTMLSelectElement;
     this.setOptions(this.rule,this.rule_options);
     this.start=document.getElementById("start-button")!as HTMLButtonElement;
+    this.pause=document.getElementById("pause")!as HTMLButtonElement;
     this.wrapper=document.getElementById("wrapper")!as HTMLDivElement;
     this.level_box=document.getElementById("level-box")!as HTMLDivElement;
+    this.double_level_box=document.getElementById("double-level-box")!as HTMLDivElement;
     this.start.addEventListener('click',()=>{
       this.wrapper.style.display="none";
       cpu_level=this.getString(this.level);
-      states.get("game")!.init();
-      (states.get("game")!as Main).setState(this.getString(this.mode),this.getString(this.rule));
-      state.set(states.get("game")!);
+      left_cpu_level=this.getString(left_level);
+      right_cpu_level=this.getString(right_level);
+      if(this.getString(this.mode)=="Arcade"){
+        states.get("arcade")!.init();
+        state.set(states.get("arcade")!);
+      }else{
+        states.get("game")!.init();
+        (states.get("game")!as Main).setState(this.getString(this.mode),this.getString(this.rule));
+        state.set(states.get("game")!);
+      }
     });
+    this.pause.addEventListener('click',()=>{
+      const bg=document.getElementById("pause-bg")!;
+      if(bg.style.display=="none"){
+        setLoop(false);
+        bg.style.display="block";
+      }else{
+        setLoop(true);
+        bg.style.display="none";
+      }
+    });
+    document.getElementById("back")!.addEventListener('click',()=>{
+      state.set(states.get("start")!);
+      states.get("start")!.init();
+      const bg=document.getElementById("pause-bg")!;
+      bg.style.display="none";
+      setLoop(true);
+    })
     this.mode.addEventListener('change',()=>{
       this.initVisibility();
     });
@@ -80,7 +114,10 @@ export class Start extends State{
 
   private initVisibility(){
     const selected=this.getString(this.mode);
-    this.level_box.style.display=selected.includes("vs CPU")?"flex":"none";
+    this.level_box.style.display=selected.includes("vs CPU ")?"flex":"none";
+    this.double_level_box.style.display=selected.includes("CPU vs CPU")?"flex":"none";
+    this.rule.style.display=selected.includes("Arcade")?"none":"inline-block";
+    document.getElementById("pause-bg")!.style.display="none";
   }
 
   private getString(s:HTMLSelectElement){
@@ -127,6 +164,7 @@ export class Main extends State{
     this.ball=new Ball(this,this.p);
     this.start_timer=3;
     this.bars=[];
+    this.particles=[];
   }
 
   setState(mode:string,rule:string){
@@ -145,7 +183,7 @@ export class Main extends State{
       case "vs CPU Normal":this.bars.push(new Bar("player",100,this.p.height*0.4,this.p),new CPUBar(this.ball!,this.p.width-100,this.p.height*0.4,this.p));break;
       case "1 vs 1 Casual":this.bars.push(new Bar("player1",100,this.p.height,this.p),new Bar("player2",this.p.width-100,this.p.height,this.p));break;
       case "1 vs 1 Normal":this.bars.push(new Bar("player1",100,this.p.height*0.4,this.p),new Bar("player2",this.p.width-100,this.p.height*0.4,this.p));break;
-      case "CPU vs CPU":this.bars.push(new CPUBar(this.ball!,100,this.p.height,this.p),new CPUBar(this.ball!,this.p.width-100,this.p.height,this.p));break;
+      case "CPU vs CPU":this.bars.push(new CPUBar(this.ball!,100,this.p.height,this.p,left_cpu_level),new CPUBar(this.ball!,this.p.width-100,this.p.height,this.p,right_cpu_level));break;
     }
   }
 
@@ -242,8 +280,10 @@ export class Bar{
     }else{
       const touch=controller.getTouchByID(this.id);
       if(touch!=null){
-        this.velocity.y=touch.touch.y-this.position.y;
+        const temp=this.position.y;
         this.position.y=touch.touch.y;
+        this.position.y=this.p.constrain(this.position.y,this.size.y*0.5,this.p.height-this.size.y*0.5);
+        this.velocity.y=this.position.y-temp;
       }else{
         this.velocity.y=0;
         this.id=-1;
@@ -410,11 +450,15 @@ export class CPUBar extends Bar{
   dir:number=1;
   level:number=1;
 
-  constructor(b:Ball,x:number,dzh:number,p:p5){
+  constructor(b:Ball,x:number,dzh:number,p:p5,level?:string){
     super("CPU",x,dzh,p);
     this.ball=b;
     this.target=this.position.y;
-    this.level=Number(cpu_level.replace("Level ",""));
+    if(level){
+      this.level=Number(level.replace("Level ",""));
+    }else{
+      this.level=Number(cpu_level.replace("Level ",""));
+    }
   }
 
   update(){

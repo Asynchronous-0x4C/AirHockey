@@ -1,12 +1,14 @@
 import p5 from "p5";
 import { Main, Start, State, StateManager } from "./classes";
 import { Controller } from "./controller";
+import { Arcade } from "./arcade";
 
 export let state:StateManager;
 export let states:Map<string,State>=new Map();
 export let controller:Controller;
 export let mousePress=false;
 export let keyPress=false;
+export let loop:boolean=true;
 
 export const sketch=(p:p5)=>{
   p.setup=()=>{
@@ -15,9 +17,11 @@ export const sketch=(p:p5)=>{
     controller=new Controller(p);
     states.set("start",new Start(p));
     states.set("game",new Main(p));
+    states.set("arcade",new Arcade(p));
     state=new StateManager(states.get("start")!);
   }
   p.draw=()=>{
+    if(!loop)return;
     state.display();
     state.update();
     controller.update();
@@ -34,4 +38,8 @@ export const sketch=(p:p5)=>{
   p.keyReleased=()=>{
     controller.released(p.keyCode);
   }
+}
+
+export function setLoop(l:boolean){
+  loop=l;
 }

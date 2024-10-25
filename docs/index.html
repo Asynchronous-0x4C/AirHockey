@@ -4,7 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>エアホッケー</title>
-    <script type="module" crossorigin src="./assets/index-CArBfqrv.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300&display=swap" rel="stylesheet">
+    <script type="module" crossorigin src="./assets/index-DHwRLH32.js"></script>
   </head>
   <body>
     <main></main>
@@ -29,6 +32,7 @@
     </div>
     <div class="bg" id="pause-bg">
       <div id="pause-box" class="column-box">
+        <p>Pause</p>
         <button class="button-ui" id="back">Back</button>
       </div>
     </div>
@@ -48,7 +52,10 @@
       -khtml-user-select: none;
       -webkit-user-select: none;
       pointer-events: none;
-      font-family: sans-serif;
+      font-family: "Noto Sans JP", serif;
+      font-optical-sizing: auto;
+      font-weight: 300;
+      font-style: normal;
     }
     ::-webkit-scrollbar{
       display: none;
@@ -139,6 +146,11 @@
       background-color: #555;
       box-shadow: 0 0 10px #0008;
       border-radius: 5px;
+      p{
+        font-size: 2rem;
+        color: #eee;
+        margin: 0;
+      }
     }
   </style>
 </html>

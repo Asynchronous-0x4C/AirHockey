@@ -1,5 +1,5 @@
 import p5, { Vector } from "p5";
-import { controller, setLoop, state, states } from "./sketch";
+import { controller, roundRectReaction, setLoop, state, states } from "./sketch";
 import { DamageParticle, Particle } from "./particle";
 
 let cpu_level="Level 1";
@@ -75,6 +75,7 @@ export class Start extends State{
       cpu_level=this.getString(this.level);
       left_cpu_level=this.getString(left_level);
       right_cpu_level=this.getString(right_level);
+      this.pause.style.display="block";
       if(this.getString(this.mode)=="Arcade"){
         states.get("arcade")!.init();
         state.set(states.get("arcade")!);
@@ -118,6 +119,7 @@ export class Start extends State{
     this.double_level_box.style.display=selected.includes("CPU vs CPU")?"flex":"none";
     this.rule.style.display=selected.includes("Arcade")?"none":"inline-block";
     document.getElementById("pause-bg")!.style.display="none";
+    this.pause.style.display="none";
   }
 
   private getString(s:HTMLSelectElement){
@@ -393,7 +395,7 @@ export class Ball{
     }
     bars.forEach(b=>{
       const pos=this.position.copy().sub(b.position);
-      const hit=this.roundRectReaction(pos,b.size.x*0.5,b.size.y*0.5,this.radius);
+      const hit=roundRectReaction(pos,b.size.x*0.5,b.size.y*0.5,this.radius);
       if(hit.hit){
         this.velocity.reflect(hit.normal);
         this.velocity.y*=0.9;
@@ -402,7 +404,7 @@ export class Ball{
         this.velocity.x*=1.15;
       }
       const dpos=this.position.copy().sub(b.dz.position);
-      const dhit=this.roundRectReaction(dpos,b.dz.size.x*0.5,b.dz.size.y*0.5,this.radius);
+      const dhit=roundRectReaction(dpos,b.dz.size.x*0.5,b.dz.size.y*0.5,this.radius);
       if(dhit.hit){
         this.parent.particles.push(new DamageParticle(new Vector(b.left?0:this.p.width,this.position.y),new Vector(5,5),new Vector(0,0),this.p));
         const left=this.position.x<this.p.width*0.5;
@@ -415,29 +417,6 @@ export class Ball{
     });
     this.velocity.x=Math.max(Math.abs(this.velocity.y)*0.75,Math.abs(this.velocity.x))*Math.sign(this.velocity.x);
     this.velocity.limit(this.radius*2.1);
-  }
-
-  length(x:number,y:number){
-    return Math.sqrt(x*x+y*y);
-  }
-
-  roundRectDist(p:Vector,x:number,y:number,radius:number) {
-    const dx=Math.abs(p.x)-x;
-    const dy=Math.abs(p.y)-y;
-    return Math.min(Math.max(dx, dy), 0.0) + this.length(Math.max(dx,0.0),Math.max(dy,0.0))- radius;
-  }
-
-  roundRectReaction(p:Vector,x:number,y:number,radius:number){
-    let delta=1e-5;
-    let d=this.roundRectDist(p,x,y,radius);
-    if(d<=0){
-      const dx=this.roundRectDist(p.copy().add(delta,0),x,y,radius)-this.roundRectDist(p.copy().add(-delta,0),x,y,radius);
-      const dy=this.roundRectDist(p.copy().add(0,delta),x,y,radius)-this.roundRectDist(p.copy().add(0,-delta),x,y,radius);
-      const n=new Vector(dx,dy).normalize();
-      return {hit:true,normal:n.mult(-d)};
-    }else{
-      return {hit:false,normal:new Vector(0,0)};
-    }
   }
 }
 
